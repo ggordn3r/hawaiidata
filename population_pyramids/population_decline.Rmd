@@ -1,0 +1,237 @@
+---
+title: "Population Decline"
+output: html_notebook
+---
+
+# This notebook, which attempted to use subject table estimates and comparison profiles has been deprecated in favor of one using PopEst.
+
+## Notebook Purpose
+
+To study Hawaii's population decline. 
+
+- 
+
+
+```{r setup}
+library(tidycensus)
+library(tidyverse)
+
+census_api_key(read_file("D:/keychain/census_key.txt"), install = TRUE, overwrite = TRUE)
+
+```
+ 
+```{r}
+
+# Not currently used. CP does not contain a breakdown of population by age.
+acscp <- load_variables(2019, "acs1/cprofile", cache = TRUE)
+
+```
+ 
+```{r}
+
+# Pop Pyramids Code reused from 
+# https://walker-data.com/umich-workshop-2022/acs-data/#43
+
+# ID relevant data
+subject <- load_variables(2020, "acs5/subject")
+subject_2015 <- subject <- load_variables(2015, "acs5/subject")
+subject_2010 <- subject <- load_variables(2010, "acs5/subject")
+
+# Prepare data request
+cohort_names <- c("0-4", "5-9", "10-14", "15-19",
+                  "20-24", "25-29", "30-34", "35-39",
+                  "40-44", "45-49", "50-54", "55-59",
+                  "60-64", "65-69", "70-74", "75-79",
+                  "80-84", "85+")
+
+```
+
+```{r}
+subject <- load_variables(2020, "acs5/subject")
+subject_2015 <- subject <- load_variables(2015, "acs5/subject")
+subject_2010 <- subject <- load_variables(2010, "acs5/subject")
+
+# In UMich workshop, 2020 example uses S0101_C03_0xx for male data and S0101_C05_0xx for female data.
+# The IDs used are inconsistent with the variable IDs listed in load_variables(), which show C02 for male and C03 for female.
+subject %>% filter( , grepl("S0101_C02_0", name)) %>% print(name)
+# In 2015 data, male is S0101_C02_002 (under 5) to S0101_C02_019 (85+)
+# Female is S0101_C03_002 (under 5) to S0101_C03_019 (85+)
+subject_2015 %>% filter( , grepl("S0101_C02_0", name)) %>% print(name)
+# 2010 Male is S0101_C02_002 to S0101_C02_019, identical to 2015
+# 2010 Female is S0101_C03_002 to S0101_C03_019, identical to 2015
+subject_2010 %>% filter( , grepl("S0101_C02_0", name)) %>% print(name)
+
+```
+
+```{r}
+# Assembling the data
+male_vars <- 2:19 %>%
+  str_pad(2, "left", "0") %>%
+  paste0("S0101_C03_0", .) %>%
+  set_names(cohort_names)
+
+female_vars <- 2:19 %>%
+  str_pad(2, "left", "0") %>%
+  paste0("S0101_C05_0", .) %>%
+  set_names(cohort_names)
+
+male_data <- get_acs(
+  geography = "state",
+  variables = male_vars,
+  state = "HI",
+  year = 2020
+) %>%
+  mutate(sex = "Male",
+         estimate = estimate * -1)
+
+female_data <- get_acs(
+  geography = "state",
+  variables = female_vars,
+  state = "HI",
+  year = 2020
+) %>%
+  mutate(sex = "Female")
+
+pyramid_data <- bind_rows(male_data, female_data) %>%
+  mutate(variable = factor(variable, levels = cohort_names))
+
+# Designing the visualization
+hawaii_pyramid <- ggplot(pyramid_data, 
+                            aes(x = estimate, y = variable, 
+                                fill = sex)) + 
+  geom_col(width = 0.95, alpha = 0.75) + 
+  theme_minimal(base_size = 18) + 
+  scale_x_continuous(labels = function(x) paste0(abs(x / 1000), "k")) + 
+  scale_fill_manual(values = c("#0F7173", "#EE4B6A")) + 
+  labs(x = "", 
+       y = "ACS estimate", 
+       title = "Population structure in Hawaii", 
+       fill = "", 
+       caption = "Data source: 2016-2020 ACS & tidycensus R package")
+
+
+```
+ 
+```{r}
+hawaii_pyramid
+```
+
+```{r}
+# https://walker-data.com/umich-workshop-2022/acs-data/#74
+
+check_male_vars <- 2:19 %>%
+  str_pad(2, "left", "0") %>%
+  paste0("S0101_C02_0", .) %>%
+  set_names(cohort_names)
+
+check_female_vars <- 2:19 %>%
+  str_pad(2, "left", "0") %>%
+  paste0("S0101_C03_0", .) %>%
+  set_names(cohort_names)
+
+check_male_data <- get_acs(
+  geography = "state",
+  variables = check_male_vars,
+  state = "HI",
+  year = 2015
+) %>%
+  mutate(sex = "Male",
+         estimate = estimate * -1)
+
+check_female_data <- get_acs(
+  geography = "state",
+  variables = check_female_vars,
+  state = "HI",
+  year = 2015
+) %>%
+  mutate(sex = "Female")
+
+check_pyramid_data <- bind_rows(check_male_data, check_female_data) %>%
+  mutate(variable = factor(variable, levels = cohort_names))
+
+check_hawaii_pyramid <- ggplot(check_pyramid_data, 
+                            aes(x = estimate, y = variable, 
+                                fill = sex)) + 
+  geom_col(width = 0.95, alpha = 0.75) + 
+  theme_minimal(base_size = 18) + 
+  scale_x_continuous(labels = function(x) paste0(abs(x / 1000), "k")) + 
+  scale_fill_manual(values = c("#0F7173", "#EE4B6A")) + 
+  labs(x = "", 
+       y = "ACS estimate", 
+       title = "Population structure in Hawaii", 
+       fill = "", 
+       caption = "Data source: 2016-2020 ACS & tidycensus R package")
+
+
+```
+
+```{r}
+check_hawaii_pyramid
+
+```
+```{r}
+sum(check_male_data$estimate)
+```
+
+
+```{r}
+
+# TODO get data for 2010 and 2015
+# See https://walker-data.com/umich-workshop-2022/acs-data/#71
+
+
+
+# TODO change C05 to C03 for Female in past years
+
+# TODO change C03 to C02 for Male in past years
+
+male_data_2015 <- get_acs(
+  geography = "state",
+  variables = check_male_vars,
+  state = "HI",
+  year = 2015
+) %>%
+  mutate(sex = "Male",
+         estimate = estimate * -1)
+
+# Error: Your API call has errors.  The API message returned is error: error: unknown variable 'S0101_C05_002E'.
+female_data_2015 <- get_acs(
+  geography = "state",
+  variables = check_female_vars,
+  state = "HI",
+  year = 2015
+) %>%
+  mutate(sex = "Female")
+
+# TODO matrix add sexes in each year
+# both_sexes = female_data$estimate + male_data$estimate
+
+# TODO matrix subtract past years from present for comparison
+
+# TODO plot different to show relative gain/loss in each age group
+
+# TODO BONUS: create counterfactual scenario with normal birth/aging/death
+
+
+# Other interesting variables in the CP to study
+
+# FERTILITY: CP02_2020_037
+# HOUSING UNITS: CP04_2015_001
+# GROSS RENT AS % OF HHI: CP04_2015_136
+# MEDIAN RENT: CP04_2015_134
+# MEDIAN HOME VALUE: CP04_2020_089
+
+
+
+
+# separate(
+#   NAME,
+#   into = c("county", "state"),
+#   sep = ", "
+# )
+
+# vars <- grep(pattern = "^B01001_|B11012_001", v19$name, value = TRUE)
+# census_pop <- get_acs(geography = "zcta", 
+#                       variables = vars, state = "HI",
+
+```
